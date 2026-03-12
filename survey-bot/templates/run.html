@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Run Bot — Survey Bot{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">▶️ Run Bot</h2>
+
+<!-- Start Form -->
+<div class="card shadow-sm mb-4" id="start-card">
+  <div class="card-header fw-bold">Job Settings</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Config</label>
+        <select id="cfg-select" class="form-select">
+          {% if configs %}
+            {% for c in configs %}
+            <option value="{{ c }}">{{ c }}</option>
+            {% endfor %}
+          {% else %}
+            <option disabled>No configs — scan a survey first</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Number of Runs</label>
+        <input id="num-runs" type="number" class="form-control" value="5" min="1">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">Sleep Between Runs (s)</label>
+        <input id="sleep-runs" type="number" class="form-control" value="30" min="0">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button id="start-btn" class="btn btn-success w-100" onclick="startJob()" {% if not configs %}disabled{% endif %}>▶️ Start</button>
+      </div>
+    </div>
+    <div class="mt-3">
+      <span class="badge bg-secondary">📄 personas.csv — <strong>{{ csv_rows }}</strong> rows available</span>
+      {% if csv_rows == 0 %}<a href="/csv" class="ms-2 small text-danger">Upload CSV first</a>{% endif %}
+    </div>
+    <div id="start-msg" class="mt-3"></div>
+  </div>
+</div>
+
+<!-- Progress Section (hidden until job starts) -->
+<div id="progress-section" class="d-none">
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-bold" id="job-label">Running…</span>
+      <button id="stop-btn" class="btn btn-sm btn-danger" onclick="stopJob()">⏹ Stop</button>
+    </div>
+    <div class="card-body">
+      <div class="d-flex justify-content-between small text-muted mb-1">
+        <span>Run <span id="run-current">0</span> of <span id="run-total">0</span></span>
+        <span id="elapsed-label"></span>
+      </div>
+      <div class="progress mb-3" style="height:22px">
+        <div id="prog-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+             style="width:0%" role="progressbar"></div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="results-table">
+          <thead class="table-light">
+            <tr><th>Run #</th><th>Status</th><th>Persona</th><th>Duration</th><th>Time</th></tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pollTimer = null;
+
+async function startJob() {
+  const configName = document.getElementById('cfg-select').value;
+  const numRuns = parseInt(document.getElementById('num-runs').value);
+  const sleepRuns = parseInt(document.getElementById('sleep-runs').value);
+  const msgEl = document.getElementById('start-msg');
+
+  try {
+    const res = await fetch('/run/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({config_name: configName, num_runs: numRuns, sleep_between_runs: sleepRuns}),
+    });
+    const data = await res.json();
+    if (data.status === 'started') {
+      msgEl.innerHTML = '';
+      document.getElementById('run-total').textContent = data.total_runs;
+      document.getElementById('progress-section').classList.remove('d-none');
+      document.getElementById('start-btn').disabled = true;
+      startPolling();
+    } else {
+      msgEl.innerHTML = `<div class="alert alert-danger py-2">❌ ${data.message}</div>`;
+    }
+  } catch (err) {
+    msgEl.innerHTML = `<div class="alert alert-danger py-2">❌ ${err}</div>`;
+  }
+}
+
+async function stopJob() {
+  await fetch('/run/stop', {method: 'POST'});
+  document.getElementById('stop-btn').disabled = true;
+  document.getElementById('stop-btn').textContent = '⏳ Stopping…';
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollStatus, 2000);
+  pollStatus();
+}
+
+async function pollStatus() {
+  try {
+    const res = await fetch('/run/status');
+    const data = await res.json();
+    updateUI(data);
+    if (!data.running) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  } catch (_) {}
+}
+
+function updateUI(data) {
+  const total = data.total_runs || 1;
+  const current = data.current_run || 0;
+  const pct = Math.round((current / total) * 100);
+
+  document.getElementById('run-current').textContent = current;
+  document.getElementById('run-total').textContent = total;
+  document.getElementById('elapsed-label').textContent = `Elapsed: ${data.elapsed_sec}s`;
+
+  const bar = document.getElementById('prog-bar');
+  bar.style.width = pct + '%';
+  bar.textContent = pct + '%';
+
+  if (!data.running) {
+    bar.classList.remove('progress-bar-animated');
+    document.getElementById('job-label').textContent = '✅ Job Complete';
+    document.getElementById('stop-btn').classList.add('d-none');
+    document.getElementById('start-btn').disabled = false;
+  }
+
+  // Rebuild results table
+  const tbody = document.getElementById('results-body');
+  tbody.innerHTML = '';
+  (data.results || []).forEach(r => {
+    const statusBadge =
+      r.status === 'success'        ? '<span class="badge bg-success">✅ OK</span>'
+      : r.status === 'error'        ? '<span class="badge bg-danger">❌ Error</span>'
+      : r.status === 'csv_exhausted'? '<span class="badge bg-warning text-dark">⚠️ CSV End</span>'
+      : `<span class="badge bg-secondary">${r.status}</span>`;
+    const persona = r.persona ? r.persona.name : '—';
+    const ts = r.timestamp ? r.timestamp.replace('T', ' ').substring(0, 19) : '';
+    tbody.innerHTML += `<tr>
+      <td>${r.run_index}</td>
+      <td>${statusBadge}</td>
+      <td>${persona}</td>
+      <td>${r.duration_sec}s</td>
+      <td class="text-muted small">${ts}</td>
+    </tr>`;
+  });
+}
+</script>
+{% endblock %}

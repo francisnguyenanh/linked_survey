@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Survey Bot{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">🏠 Dashboard</h2>
+
+<div class="row g-4">
+  <!-- Saved Configs -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold">⚙️ Saved Configs ({{ configs | length }})</div>
+      <div class="card-body">
+        {% if configs %}
+          <ul class="list-group list-group-flush">
+            {% for name in configs %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <a href="/configure/{{ name }}">{{ name }}</a>
+              <span>
+                <a href="/config/export/{{ name }}" class="btn btn-sm btn-outline-secondary">📥</a>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteConfig('{{ name }}')">🗑</button>
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted">No configs yet. <a href="/scanner">Scan a survey</a> to create one.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer">
+        <a href="/scanner" class="btn btn-primary btn-sm">🔍 Scan New Survey</a>
+        <a href="/run" class="btn btn-success btn-sm ms-2">▶️ Run Bot</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Runs -->
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold">📋 Recent Runs</div>
+      <div class="card-body p-0">
+        {% if recent %}
+          <table class="table table-sm mb-0">
+            <thead class="table-light"><tr>
+              <th>#</th><th>Config</th><th>Status</th><th>Persona</th><th>Duration</th>
+            </tr></thead>
+            <tbody>
+              {% for r in recent %}
+              <tr>
+                <td>{{ r.run_index }}</td>
+                <td>{{ r.config_name }}</td>
+                <td>
+                  {% if r.status == 'success' %}<span class="badge bg-success">✅ OK</span>
+                  {% elif r.status == 'error' %}<span class="badge bg-danger">❌ Error</span>
+                  {% else %}<span class="badge bg-warning text-dark">⚠️ {{ r.status }}</span>{% endif %}
+                </td>
+                <td>{{ r.persona.name if r.persona else '—' }}</td>
+                <td>{{ r.duration_sec }}s</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted p-3">No runs yet.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer">
+        <a href="/history" class="btn btn-outline-secondary btn-sm">View All History</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Links -->
+<div class="row g-3 mt-2">
+  <div class="col-sm-4">
+    <a href="/scanner" class="card text-decoration-none text-dark h-100">
+      <div class="card-body text-center py-4">
+        <div style="font-size:2rem">🔍</div>
+        <div class="fw-bold mt-2">Scanner</div>
+        <small class="text-muted">Scan a survey URL</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-4">
+    <a href="/csv" class="card text-decoration-none text-dark h-100">
+      <div class="card-body text-center py-4">
+        <div style="font-size:2rem">📄</div>
+        <div class="fw-bold mt-2">CSV Data</div>
+        <small class="text-muted">Manage persona data</small>
+      </div>
+    </a>
+  </div>
+  <div class="col-sm-4">
+    <a href="/run" class="card text-decoration-none text-dark h-100">
+      <div class="card-body text-center py-4">
+        <div style="font-size:2rem">▶️</div>
+        <div class="fw-bold mt-2">Run Bot</div>
+        <small class="text-muted">Start automation</small>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteConfig(name) {
+  if (!confirm(`Delete config "${name}"?`)) return;
+  const r = await fetch(`/config/${name}`, {method: 'DELETE'});
+  if ((await r.json()).status === 'ok') location.reload();
+}
+</script>
+{% endblock %}
+

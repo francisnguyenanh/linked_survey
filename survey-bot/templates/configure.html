@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Configure: {{ config.config_name }} — Survey Bot{% endblock %}
+
+{% block content %}
+<h2 class="mb-1">⚙️ Configure: <code>{{ config.config_name }}</code></h2>
+<p class="text-muted mb-4">URL: <a href="{{ config.url }}" target="_blank">{{ config.url }}</a></p>
+
+<div class="row g-4">
+  <!-- LEFT: Questions -->
+  <div class="col-lg-8">
+    {% for q in config.questions %}
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header d-flex align-items-center gap-2">
+        <strong>Q{{ q.question_index }}</strong>
+        <span class="badge badge-{{ q.question_type }} text-white">{{ q.question_type }}</span>
+        <span class="text-truncate" style="max-width:400px" title="{{ q.question_text }}">
+          {{ q.question_text[:80] }}{% if q.question_text|length > 80 %}…{% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        {% if q.question_type in ['radio', 'dropdown'] %}
+          <p class="mb-2 text-muted small">Select allowed options (bot will pick randomly from ticked options):</p>
+          <div class="mb-2">
+            <button type="button" class="btn btn-xs btn-outline-secondary btn-sm me-1"
+                    onclick="selectAll({{ q.question_index }}, true)">Select All</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary btn-sm"
+                    onclick="selectAll({{ q.question_index }}, false)">Deselect All</button>
+          </div>
+          <div class="row row-cols-1 row-cols-sm-2 g-1" id="opts-{{ q.question_index }}">
+            {% for opt in q.options %}
+            <div class="col">
+              <div class="form-check">
+                <input class="form-check-input q{{ q.question_index }}-opt" type="checkbox"
+                       name="q{{ q.question_index }}_opt"
+                       value="{{ opt.index }}"
+                       id="q{{ q.question_index }}_opt_{{ opt.index }}"
+                       {% if opt.index in q.allowed_options %}checked{% endif %}>
+                <label class="form-check-label small" for="q{{ q.question_index }}_opt_{{ opt.index }}">
+                  [{{ opt.index }}] {{ opt.label }}
+                </label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        {% elif q.question_type in ['text_group', 'text'] %}
+          <div class="alert alert-info mb-0 py-2">
+            📄 Will use data from <strong>CSV file</strong>
+            {% if q.question_type == 'text_group' %} (name → email → phone){% endif %}
+          </div>
+          {% if q.fields %}
+          <ul class="mt-2 mb-0 small text-muted">
+            {% for f in q.fields %}<li>{{ f.field_key }}{% if f.placeholder %}: <em>{{ f.placeholder }}</em>{% endif %}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- RIGHT: Run Settings (sticky) -->
+  <div class="col-lg-4">
+    <div class="card shadow-sm" style="position:sticky;top:80px">
+      <div class="card-header fw-bold">🛠 Run Settings</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Config Name</label>
+          <input id="cfg-name" type="text" class="form-control" value="{{ config.config_name }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Number of Runs</label>
+          <input id="cfg-runs" type="number" class="form-control" value="{{ config.num_runs }}" min="1">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Sleep Between Runs (s)</label>
+          <input id="cfg-sleep" type="number" class="form-control" value="{{ config.sleep_between_runs }}" min="0">
+        </div>
+        <div class="d-grid gap-2">
+          <button id="save-btn" class="btn btn-success" onclick="saveConfig()">💾 Save Config</button>
+          <a href="/config/export/{{ config.config_name }}" class="btn btn-outline-secondary">📥 Export JSON</a>
+          <a href="/run" class="btn btn-primary">▶️ Go to Run Bot</a>
+        </div>
+        <div id="save-msg" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Store original question data from Jinja for rebuilding payload
+const questions = {{ config.questions | tojson }};
+
+function selectAll(qIndex, checked) {
+  document.querySelectorAll(`.q${qIndex}-opt`).forEach(cb => cb.checked = checked);
+}
+
+async function saveConfig() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+
+  const updatedQuestions = questions.map(q => {
+    const entry = {question_index: q.question_index};
+    if (['radio', 'dropdown'].includes(q.question_type)) {
+      const checked = [...document.querySelectorAll(`.q${q.question_index}-opt:checked`)]
+                        .map(cb => parseInt(cb.value));
+      entry.allowed_options = checked;
+    }
+    return entry;
+  });
+
+  const payload = {
+    config_name: document.getElementById('cfg-name').value.trim(),
+    url: {{ config.url | tojson }},
+    num_runs: parseInt(document.getElementById('cfg-runs').value),
+    sleep_between_runs: parseInt(document.getElementById('cfg-sleep').value),
+    questions: updatedQuestions,
+  };
+
+  try {
+    const res = await fetch('/configure/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    const msg = document.getElementById('save-msg');
+    if (data.status === 'ok') {
+      msg.innerHTML = '<div class="alert alert-success py-2">✅ Saved!</div>';
+      // Update URL if config name changed
+      if (data.config_name !== {{ config.config_name | tojson }}) {
+        window.location.href = `/configure/${data.config_name}`;
+      }
+    } else {
+      msg.innerHTML = `<div class="alert alert-danger py-2">❌ ${data.message || 'Error'}</div>`;
+    }
+  } catch (err) {
+    document.getElementById('save-msg').innerHTML =
+      `<div class="alert alert-danger py-2">❌ ${err}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

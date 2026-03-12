@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}History — Survey Bot{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">📋 Run History</h2>
+  <button class="btn btn-outline-danger btn-sm" onclick="clearHistory()">🗑 Clear History</button>
+</div>
+
+<!-- Filter Buttons -->
+<div class="mb-3">
+  <button class="btn btn-sm btn-outline-secondary active" id="filter-all"    onclick="setFilter('all')">All ({{ runs | length }})</button>
+  <button class="btn btn-sm btn-outline-success ms-1"    id="filter-success" onclick="setFilter('success')">✅ Success ({{ runs | selectattr('status','eq','success') | list | length }})</button>
+  <button class="btn btn-sm btn-outline-danger ms-1"     id="filter-error"   onclick="setFilter('error')">❌ Error ({{ runs | selectattr('status','eq','error') | list | length }})</button>
+</div>
+
+{% if runs %}
+<div class="table-responsive">
+  <table class="table table-hover table-sm shadow-sm" id="history-table">
+    <thead class="table-dark">
+      <tr>
+        <th>Run #</th>
+        <th>Config</th>
+        <th>Status</th>
+        <th>Persona</th>
+        <th>Duration</th>
+        <th>Timestamp</th>
+        <th>Error</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr class="run-row" data-status="{{ r.status }}">
+        <td>{{ r.run_index }}</td>
+        <td>{{ r.config_name }}</td>
+        <td>
+          {% if r.status == 'success' %}<span class="badge bg-success">✅ OK</span>
+          {% elif r.status == 'error' %}<span class="badge bg-danger">❌ Error</span>
+          {% elif r.status == 'csv_exhausted' %}<span class="badge bg-warning text-dark">⚠️ CSV End</span>
+          {% else %}<span class="badge bg-secondary">{{ r.status }}</span>{% endif %}
+        </td>
+        <td>{{ r.persona.name if r.persona else '—' }}</td>
+        <td>{{ r.duration_sec }}s</td>
+        <td class="text-muted small">{{ (r.timestamp or '')[:19].replace('T',' ') }}</td>
+        <td class="text-danger small" style="max-width:220px;word-break:break-all">
+          {{ r.error_msg or '' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <div class="alert alert-info">No run history yet. <a href="/run">Start the bot</a> to see results here.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentFilter = 'all';
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('[id^=filter-]').forEach(b => b.classList.remove('active'));
+  document.getElementById(`filter-${f}`).classList.add('active');
+  document.querySelectorAll('.run-row').forEach(row => {
+    row.style.display = (f === 'all' || row.dataset.status === f) ? '' : 'none';
+  });
+}
+
+async function clearHistory() {
+  if (!confirm('Delete all run history?')) return;
+  const res = await fetch('/history', {method: 'DELETE'});
+  if ((await res.json()).status === 'ok') location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}CSV Data — Survey Bot{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">📄 CSV Persona Data</h2>
+
+<div class="row g-4">
+  <!-- Upload Card -->
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">Upload personas.csv</div>
+      <div class="card-body">
+        <p class="text-muted small">Required columns: <code>name</code>, <code>email</code>, <code>phone</code></p>
+        <input id="csv-file" type="file" accept=".csv" class="form-control mb-3">
+        <button id="upload-btn" class="btn btn-primary" onclick="uploadCSV()">⬆️ Upload</button>
+        <div id="upload-msg" class="mt-3"></div>
+      </div>
+      <div class="card-footer">
+        <button class="btn btn-outline-secondary btn-sm" onclick="downloadTemplate()">📥 Download Template CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Card -->
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">Current Data Preview</div>
+      <div class="card-body" id="preview-area">
+        {% if total > 0 %}
+          {% if total < 5 %}
+          <div class="alert alert-warning py-2">⚠️ Very few rows ({{ total }}). Consider adding more.</div>
+          {% endif %}
+          <p>Total rows: <strong>{{ total }}</strong> &mdash; Will support up to <strong>{{ total }}</strong> bot runs.</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr><th>#</th>{% for col in preview[0].keys() %}<th>{{ col }}</th>{% endfor %}</tr>
+              </thead>
+              <tbody>
+                {% for row in preview %}
+                <tr>
+                  <td>{{ loop.index }}</td>
+                  {% for v in row.values() %}<td>{{ v }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-muted">No CSV loaded yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function uploadCSV() {
+  const fileInput = document.getElementById('csv-file');
+  const msgEl = document.getElementById('upload-msg');
+  if (!fileInput.files.length) { alert('Choose a file first.'); return; }
+
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  msgEl.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Uploading…';
+
+  const form = new FormData();
+  form.append('file', fileInput.files[0]);
+
+  try {
+    const res = await fetch('/csv/upload', {method: 'POST', body: form});
+    const data = await res.json();
+    if (data.status === 'ok') {
+      msgEl.innerHTML = `<div class="alert alert-success py-2">✅ Uploaded! ${data.total_rows} rows.</div>`;
+      // Rebuild preview table
+      const area = document.getElementById('preview-area');
+      if (data.preview && data.preview.length) {
+        const cols = Object.keys(data.preview[0]);
+        const rows = data.preview.map((r, i) =>
+          `<tr><td>${i+1}</td>${cols.map(c=>`<td>${r[c]??''}</td>`).join('')}</tr>`
+        ).join('');
+        area.innerHTML = `
+          <p>Total rows: <strong>${data.total_rows}</strong></p>
+          <div class="table-responsive"><table class="table table-sm table-bordered">
+            <thead class="table-light"><tr><th>#</th>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>`;
+      }
+    } else {
+      msgEl.innerHTML = `<div class="alert alert-danger py-2">❌ ${data.message}</div>`;
+    }
+  } catch (err) {
+    msgEl.innerHTML = `<div class="alert alert-danger py-2">❌ ${err}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function downloadTemplate() {
+  const csv = 'name,email,phone\nNguyen Van A,nguyenvana@gmail.com,090-1234-5678\nTran Thi B,tranthib@gmail.com,080-9876-5432\n';
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'personas_template.csv';
+  a.click();
+}
+</script>
+{% endblock %}

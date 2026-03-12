@@ -1,0 +1,17 @@
+CONFIG = {
+    "num_processes": 3,
+    "sleep_between": 30,
+    "gender": 0,
+    "age": "22",
+    "occupation_index": 6,
+    "graduation_status_index": 0,
+    "graduation_year_index": 7,
+    "job_hunting_index": 4,
+    "new_grad_recruitment_index": 0,
+    "employment_type_index": 0,
+    "reward_index": 0,
+    "nationality": "Viet Nam ベトナム",
+    "use_random_name": True,
+    "use_random_email": True,
+    "use_random_phone": True,
+}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Scanner — Survey Bot{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">🔍 Survey Scanner</h2>
+
+<div class="card shadow-sm" style="max-width:640px">
+  <div class="card-body">
+    <p class="text-muted">Enter a SurveyMonkey URL to automatically discover all questions and generate a config template.</p>
+    <div class="mb-3">
+      <label class="form-label fw-bold">Survey URL</label>
+      <input id="url-input" type="url" class="form-control" placeholder="https://jp.surveymonkey.com/r/..." required>
+    </div>
+    <button id="scan-btn" class="btn btn-primary">
+      <span id="btn-text">🔍 Scan Survey</span>
+      <span id="btn-spinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
+    </button>
+  </div>
+</div>
+
+<div id="result-area" class="mt-4"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('scan-btn').addEventListener('click', async () => {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { alert('Please enter a URL.'); return; }
+
+  const btn = document.getElementById('scan-btn');
+  const spinner = document.getElementById('btn-spinner');
+  const btnText = document.getElementById('btn-text');
+  const resultArea = document.getElementById('result-area');
+
+  btn.disabled = true;
+  spinner.classList.remove('d-none');
+  btnText.textContent = 'Scanning…';
+  resultArea.innerHTML = '';
+
+  try {
+    const res = await fetch('/scanner/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      resultArea.innerHTML = `
+        <div class="alert alert-success">
+          ✅ Found <strong>${data.scan.total_questions}</strong> questions.
+          Redirecting to config editor in <span id="countdown">2</span>s…
+        </div>`;
+      let n = 2;
+      const timer = setInterval(() => {
+        n--;
+        const el = document.getElementById('countdown');
+        if (el) el.textContent = n;
+        if (n <= 0) {
+          clearInterval(timer);
+          window.location.href = `/configure/${data.config_name}`;
+        }
+      }, 1000);
+    } else {
+      resultArea.innerHTML = `<div class="alert alert-danger">❌ ${data.message}</div>`;
+    }
+  } catch (err) {
+    resultArea.innerHTML = `<div class="alert alert-danger">❌ Network error: ${err}</div>`;
+  } finally {
+    btn.disabled = false;
+    spinner.classList.add('d-none');
+    btnText.textContent = '🔍 Scan Survey';
+  }
+});
+</script>
+{% endblock %}
