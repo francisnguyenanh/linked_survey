@@ -185,22 +185,31 @@ def _fill_text_group(container, persona: dict):
 
 
 def _wait_for_page_ready(driver, wait: WebDriverWait):
-    """Wait for SurveyMonkey SPA to finish rendering questions."""
-    selectors_to_try = [
-        'div[class*="sv_q"]',
-        'div[class*="sv-question"]',
-        'input[type="radio"]',
-        'select',
-        'fieldset',
-    ]
-    for selector in selectors_to_try:
-        try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
-            time.sleep(2)  # extra settle time for React re-renders
-            return
-        except TimeoutException:
-            continue
-    time.sleep(5)  # last resort if no selector found
+    """
+    Wait for SurveyMonkey page to finish rendering.
+    Uses EC.any_of() to check ALL selectors simultaneously — 
+    returns as soon as ANY one matches, no wasted sequential timeouts.
+    """
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.common.by import By
+
+    # Check all selectors in parallel — return on first match
+    try:
+        WebDriverWait(driver, 20).until(
+            EC.any_of(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'fieldset')),
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="radio"]')),
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'select')),
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="sv_q"]')),
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="sv-question"]')),
+            )
+        )
+        _log("[BOT] Page ready.")
+    except TimeoutException:
+        _log("[BOT] WARNING: Page ready timeout after 20s. Proceeding anyway.")
+
+    # Extra settle time for any JS re-renders after initial render
+    time.sleep(2)
 
 
 def _click_submit(driver, wait: WebDriverWait):
