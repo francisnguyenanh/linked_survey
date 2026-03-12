@@ -65,7 +65,7 @@ def main():
 
     with open(filename, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(["Tên", "Email (Dot Trick)", "Số điện thoại"])
+        writer.writerow(["name", "email", "phone"])
         
         for i in range(num_rows):
             name = generate_fake_name()
