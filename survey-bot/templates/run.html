@@ -33,6 +33,27 @@
         <button id="start-btn" class="btn btn-success w-100" onclick="startJob()" {% if not configs %}disabled{% endif %}>▶️ Start</button>
       </div>
     </div>
+    <div class="row mt-3">
+      <div class="col-12">
+        <div class="card border-0 bg-light p-3">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox"
+                   id="pause-ip-rotation" onchange="toggleRotationHint()">
+            <label class="form-check-label fw-semibold" for="pause-ip-rotation">
+              📱 Pause between runs for iPhone IP rotation
+            </label>
+          </div>
+          <div id="rotation-hint" class="d-none mt-2 small text-muted ps-4">
+            After each submission the bot pauses. Toggle ✈️ Airplane Mode on iPhone
+            (ON → wait 5s → OFF), wait for signal bars to return, then click
+            <strong>Continue</strong>. New carrier IP = new submission.
+            <br><span class="text-warning fw-semibold">
+              ⚡ Tip: Set "Sleep Between Runs" to 0 when using this mode.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
     <div class="mt-3">
       <span class="badge bg-secondary">📄 personas.csv — <strong>{{ csv_rows }}</strong> rows available</span>
       {% if csv_rows == 0 %}<a href="/csv" class="ms-2 small text-danger">Upload CSV first</a>{% endif %}
@@ -43,6 +64,54 @@
 
 <!-- Progress Section (hidden until job starts) -->
 <div id="progress-section" class="d-none">
+
+  <!-- IP Rotation Pause Banner -->
+  <div id="ip-rotation-banner" class="d-none mb-3">
+    <div class="card border-warning">
+      <div class="card-body">
+        <div class="row align-items-center">
+          <div class="col-md-7">
+            <h5 class="mb-3">📱 Rotate iPhone IP Now</h5>
+            <div class="d-flex flex-column gap-2">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-secondary rounded-circle px-2">1</span>
+                <span>Swipe open <strong>Control Center</strong> on iPhone</span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger rounded-circle px-2">2</span>
+                <span>Tap ✈️ <strong>Airplane Mode → ON</strong></span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-warning text-dark rounded-circle px-2">3</span>
+                <span>Wait <strong>5 seconds</strong></span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-success rounded-circle px-2">4</span>
+                <span>Tap ✈️ <strong>Airplane Mode → OFF</strong></span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary rounded-circle px-2">5</span>
+                <span>Wait for 📶 signal bars to return (~5–10s)</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-5 text-center mt-4 mt-md-0">
+            <div class="display-4 mb-1" id="pause-timer">⏳</div>
+            <div class="text-muted small mb-3" id="pause-waiting-label">Waiting...</div>
+            <button id="continue-btn" class="btn btn-success btn-lg w-100"
+                    onclick="confirmIPRotated()">
+              ✅ IP Rotated — Continue
+            </button>
+            <div class="text-muted small mt-2">
+              Next: Run <strong id="next-run-label">—</strong>
+              of <strong id="next-run-total">—</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="card shadow-sm mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span class="fw-bold" id="job-label">Running…</span>
@@ -75,18 +144,26 @@
 {% block scripts %}
 <script>
 let pollTimer = null;
+let pauseStartTime = null;
+let pauseTimerInterval = null;
 
 async function startJob() {
   const configName = document.getElementById('cfg-select').value;
   const numRuns = parseInt(document.getElementById('num-runs').value);
   const sleepRuns = parseInt(document.getElementById('sleep-runs').value);
+  const pauseIPRotation = document.getElementById('pause-ip-rotation').checked;
   const msgEl = document.getElementById('start-msg');
 
   try {
     const res = await fetch('/run/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({config_name: configName, num_runs: numRuns, sleep_between_runs: sleepRuns}),
+      body: JSON.stringify({
+        config_name: configName,
+        num_runs: numRuns,
+        sleep_between_runs: sleepRuns,
+        pause_for_ip_rotation: pauseIPRotation,
+      }),
     });
     const data = await res.json();
     if (data.status === 'started') {
@@ -107,6 +184,12 @@ async function stopJob() {
   await fetch('/run/stop', {method: 'POST'});
   document.getElementById('stop-btn').disabled = true;
   document.getElementById('stop-btn').textContent = '⏳ Stopping…';
+}
+
+function toggleRotationHint() {
+  const checked = document.getElementById('pause-ip-rotation').checked;
+  document.getElementById('rotation-hint').classList.toggle('d-none', !checked);
+  if (checked) document.getElementById('sleep-runs').value = 0;
 }
 
 function startPolling() {
@@ -141,10 +224,45 @@ function updateUI(data) {
   bar.textContent = pct + '%';
 
   if (!data.running) {
-    bar.classList.remove('progress-bar-animated');
+    bar.classList.remove('progress-bar-animated', 'bg-warning');
+    bar.classList.add('bg-success');
     document.getElementById('job-label').textContent = '✅ Job Complete';
     document.getElementById('stop-btn').classList.add('d-none');
     document.getElementById('start-btn').disabled = false;
+    document.getElementById('ip-rotation-banner').classList.add('d-none');
+    if (pauseTimerInterval) { clearInterval(pauseTimerInterval); pauseTimerInterval = null; }
+    pauseStartTime = null;
+  }
+
+  // IP rotation banner
+  const banner = document.getElementById('ip-rotation-banner');
+  if (data.waiting_for_ip_rotation && data.running) {
+    banner.classList.remove('d-none');
+    if (!pauseStartTime) {
+      pauseStartTime = data.waiting_since ? new Date(data.waiting_since + 'Z') : new Date();
+      pauseTimerInterval = setInterval(updatePauseTimer, 1000);
+    }
+    const nextRun = current + 1;
+    const elNext = document.getElementById('next-run-label');
+    const elTotal = document.getElementById('next-run-total');
+    if (elNext) elNext.textContent = nextRun;
+    if (elTotal) elTotal.textContent = total;
+    bar.classList.remove('bg-success', 'progress-bar-animated');
+    bar.classList.add('bg-warning');
+    document.getElementById('job-label').textContent = `⏸ Waiting for IP rotation after run ${current}…`;
+  } else {
+    banner.classList.add('d-none');
+    if (pauseTimerInterval && !data.waiting_for_ip_rotation) {
+      clearInterval(pauseTimerInterval);
+      pauseTimerInterval = null;
+      pauseStartTime = null;
+      document.getElementById('pause-timer').textContent = '⏳';
+    }
+    if (data.running) {
+      bar.classList.remove('bg-warning');
+      bar.classList.add('bg-success', 'progress-bar-animated');
+      document.getElementById('job-label').textContent = 'Running…';
+    }
   }
 
   // Rebuild results table
@@ -152,9 +270,9 @@ function updateUI(data) {
   tbody.innerHTML = '';
   (data.results || []).forEach(r => {
     const statusBadge =
-      r.status === 'success'        ? '<span class="badge bg-success">✅ OK</span>'
-      : r.status === 'error'        ? '<span class="badge bg-danger">❌ Error</span>'
-      : r.status === 'csv_exhausted'? '<span class="badge bg-warning text-dark">⚠️ CSV End</span>'
+      r.status === 'success'         ? '<span class="badge bg-success">✅ OK</span>'
+      : r.status === 'error'         ? '<span class="badge bg-danger">❌ Error</span>'
+      : r.status === 'csv_exhausted' ? '<span class="badge bg-warning text-dark">⚠️ CSV End</span>'
       : `<span class="badge bg-secondary">${r.status}</span>`;
     const persona = r.persona ? r.persona.name : '—';
     const ts = r.timestamp ? r.timestamp.replace('T', ' ').substring(0, 19) : '';
@@ -166,6 +284,34 @@ function updateUI(data) {
       <td class="text-muted small">${ts}</td>
     </tr>`;
   });
+}
+
+function updatePauseTimer() {
+  if (!pauseStartTime) return;
+  const elapsed = Math.round((Date.now() - pauseStartTime) / 1000);
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const display = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${elapsed}s`;
+  const el = document.getElementById('pause-timer');
+  if (el) el.textContent = display;
+  const lbl = document.getElementById('pause-waiting-label');
+  if (lbl) lbl.textContent = `Waiting ${display} for IP rotation…`;
+}
+
+async function confirmIPRotated() {
+  const btn = document.getElementById('continue-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Resuming...';
+  try {
+    await fetch('/run/continue', {method: 'POST'});
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '✅ IP Rotated — Continue';
+    }, 3000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '✅ IP Rotated — Continue';
+  }
 }
 </script>
 {% endblock %}

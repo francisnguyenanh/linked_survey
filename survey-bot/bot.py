@@ -35,6 +35,20 @@ from selenium.common.exceptions import (
 DATA_DIR = Path(__file__).parent / "data"
 RUN_LOG = DATA_DIR / "run_log.jsonl"
 
+# ---------------------------------------------------------------------------
+# Job reference — set by app.py so the bot can update waiting state
+# ---------------------------------------------------------------------------
+_job_ref = None
+
+
+def set_job_ref(job_dict: dict):
+    global _job_ref
+    _job_ref = job_dict
+
+
+def _get_job_ref():
+    return _job_ref
+
 
 def _log(msg: str):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
@@ -60,50 +74,55 @@ def _make_driver() -> uc.Chrome:
 
 def _find_question_container(driver, wait: WebDriverWait, question_index: int):
     """
-    Locate the DOM container for a 1-based question index.
-
-    SurveyMonkey renders each question inside a <div> that carries the question
-    ordinal in one of several attributes depending on skin/version:
-      • data-question-pk  (numeric, matches 1-based index order)
-      • data-scrollid     e.g. "page1question1"
-      • The nth div.survey-question (positional fallback)
-    We try each strategy in order and return the first match.
+    Find the nth question container (1-based) using the same selector priority
+    as the scanner JS. Classic SurveyMonkey skin (fieldset) is listed first.
+    Falls back to execute_script() if Selenium selectors fail.
     """
-    # Strategy 1: nth div.survey-question  (most reliable across versions)
-    try:
-        containers = wait.until(
-            EC.presence_of_all_elements_located(
-                (By.CSS_SELECTOR, "div.survey-question, div[data-question-pk], div[data-scrollid]")
-            )
-        )
-        # De-duplicate while preserving order — containers may match multiple selectors
-        seen = set()
-        unique = []
-        for el in containers:
-            eid = el.id
-            if eid not in seen:
-                seen.add(eid)
-                unique.append(el)
-        if question_index - 1 < len(unique):
-            return unique[question_index - 1]
-    except TimeoutException:
-        pass
+    selectors = [
+        'fieldset',
+        'div.survey-question',
+        'div[class*="sv_q"]:not([class*="sv_q_"])',
+        'div[class*="sv-question"]',
+        'li[class*="sv_q"]',
+        'div[data-question-pk]',
+        'div[data-scrollid]',
+    ]
 
-    # Strategy 2: data-scrollid="page1question{N}"
-    try:
-        return driver.find_element(
-            By.CSS_SELECTOR, f'[data-scrollid="page1question{question_index}"]'
-        )
-    except NoSuchElementException:
-        pass
+    for selector in selectors:
+        try:
+            elements = WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, selector))
+            )
+            if elements and question_index - 1 < len(elements):
+                _log(f"[BOT] Q{question_index} container via: {selector} ({len(elements)} total)")
+                return elements[question_index - 1]
+        except TimeoutException:
+            continue
+
+    # JS fallback with same priority
+    _log(f"[BOT] Q{question_index}: Selenium selectors failed, trying JS fallback")
+    container = driver.execute_script("""
+        const sels = ['fieldset', 'div.survey-question',
+                      'div[class*="sv_q"]', 'div[class*="sv-question"]',
+                      'div[data-question-pk]'];
+        const idx = arguments[0] - 1;
+        for (const sel of sels) {
+            const els = document.querySelectorAll(sel);
+            if (els.length > idx) return els[idx];
+        }
+        return null;
+    """, question_index)
+
+    if container:
+        return container
 
     raise RuntimeError(f"Cannot find container for question index {question_index}")
 
 
-def _click_radio(container, option_index: int):
+def _click_radio(driver, container, option_index: int):
     """
     Find all radio inputs inside a question container and click by 0-based index.
-    Retries once on StaleElementReferenceException.
+    Falls back to execute_script click when SurveyMonkey intercepts the event.
     """
     for attempt in range(2):
         try:
@@ -112,7 +131,11 @@ def _click_radio(container, option_index: int):
                 raise IndexError(
                     f"Radio index {option_index} out of range (found {len(radios)})"
                 )
-            radios[option_index].click()
+            try:
+                radios[option_index].click()
+            except Exception:
+                # SurveyMonkey sometimes intercepts native clicks — use JS
+                driver.execute_script("arguments[0].click();", radios[option_index])
             return
         except StaleElementReferenceException:
             if attempt == 1:
@@ -120,10 +143,21 @@ def _click_radio(container, option_index: int):
             time.sleep(0.3)
 
 
-def _select_dropdown(container, option_index: int):
-    """Select a <select> option by 0-based index inside a question container."""
+def _select_dropdown(driver, container, option_index: int):
+    """Select a <select> option by 0-based index inside a question container.
+    Falls back to JS dispatchEvent when Select() fails (React controlled inputs).
+    """
     select_el = container.find_element(By.CSS_SELECTOR, "select")
-    Select(select_el).select_by_index(option_index)
+    try:
+        Select(select_el).select_by_index(option_index)
+    except Exception:
+        # React-controlled <select> may need a programmatic change event
+        driver.execute_script(
+            "arguments[0].selectedIndex = arguments[1]; "
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            select_el,
+            option_index,
+        )
 
 
 def _fill_text_group(container, persona: dict):
@@ -148,6 +182,25 @@ def _fill_text_group(container, persona: dict):
         inp.clear()
         inp.send_keys(field_values[i])
         time.sleep(random.uniform(0.2, 0.5))  # tiny intra-field delay
+
+
+def _wait_for_page_ready(driver, wait: WebDriverWait):
+    """Wait for SurveyMonkey SPA to finish rendering questions."""
+    selectors_to_try = [
+        'div[class*="sv_q"]',
+        'div[class*="sv-question"]',
+        'input[type="radio"]',
+        'select',
+        'fieldset',
+    ]
+    for selector in selectors_to_try:
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+            time.sleep(2)  # extra settle time for React re-renders
+            return
+        except TimeoutException:
+            continue
+    time.sleep(5)  # last resort if no selector found
 
 
 def _click_submit(driver, wait: WebDriverWait):
@@ -203,10 +256,13 @@ class SurveyBot:
     stop_event   : threading.Event — set this to request early stop
     """
 
-    def __init__(self, config: dict, csv_manager, stop_event: threading.Event):
+    def __init__(self, config: dict, csv_manager, stop_event: threading.Event,
+                 pause_for_ip_rotation: bool = False, pause_event=None):
         self.config = config
         self.csv_manager = csv_manager
         self.stop_event = stop_event
+        self.pause_for_ip_rotation = pause_for_ip_rotation
+        self.pause_event = pause_event  # threading.Event
         self.results: list[dict] = []
         self.current_run: int = 0
 
@@ -240,12 +296,32 @@ class SurveyBot:
                 _log(f"CSV exhausted at run {i} — stopping.")
                 break
 
-            # Sleep between runs (not after last one), 1-second ticks
             if i < num_runs - 1 and not self.stop_event.is_set():
-                for _ in range(sleep_sec):
-                    if self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                if self.pause_for_ip_rotation and self.pause_event:
+                    # Signal UI that we are waiting for IP rotation
+                    _ref = _get_job_ref()
+                    if _ref is not None:
+                        _ref["waiting_for_ip_rotation"] = True
+                        _ref["waiting_since"] = datetime.utcnow().isoformat()
+                    _log(f"⏸ Run {i+1} done. Waiting for user to rotate IP...")
+                    self.pause_event.clear()
+                    # Block until user clicks Continue, checking stop_event each second
+                    while not self.pause_event.is_set():
+                        if self.stop_event.is_set():
+                            _log("Stop requested during IP rotation pause.")
+                            return
+                        time.sleep(1)
+                    _log(f"▶ IP rotation confirmed. Continuing run {i+2}...")
+                    # Short stabilization wait after resume
+                    for _ in range(5):
+                        if self.stop_event.is_set():
+                            break
+                        time.sleep(1)
+                else:
+                    for _ in range(sleep_sec):
+                        if self.stop_event.is_set():
+                            break
+                        time.sleep(1)
 
         _log("Run loop finished.")
 
@@ -292,6 +368,9 @@ class SurveyBot:
             url = self.config["url"]
             driver.get(url)
 
+            # Wait for React SPA to finish rendering before filling questions
+            _wait_for_page_ready(driver, wait)
+
             # Step 4: Fill each question
             for q in self.config.get("questions", []):
                 q_idx = q["question_index"]
@@ -305,7 +384,7 @@ class SurveyBot:
                         _log(f"  Q{q_idx}: no allowed_options, skipping")
                         continue
                     chosen = random.choice(allowed)
-                    _click_radio(container, chosen)
+                    _click_radio(driver, container, chosen)
                     _log(f"  Q{q_idx} radio → index {chosen}")
 
                 elif q_type == "dropdown":
@@ -314,7 +393,7 @@ class SurveyBot:
                         _log(f"  Q{q_idx}: no allowed_options, skipping")
                         continue
                     chosen = random.choice(allowed)
-                    _select_dropdown(container, chosen)
+                    _select_dropdown(driver, container, chosen)
                     _log(f"  Q{q_idx} dropdown → index {chosen}")
 
                 elif q_type in ("text_group", "text"):

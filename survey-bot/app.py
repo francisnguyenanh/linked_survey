@@ -35,7 +35,7 @@ from flask import (
     url_for,
 )
 
-from bot import SurveyBot
+from bot import SurveyBot, set_job_ref
 from config_manager import ConfigManager
 from csv_manager import CSVManager
 from scanner import SurveyScanner
@@ -71,6 +71,10 @@ job: dict = {
     "started_at": None,
     "config_name": None,
     "csv_total_rows": 0,
+    "waiting_for_ip_rotation": False,
+    "waiting_since": None,
+    "pause_for_ip_rotation": False,
+    "pause_event": None,
 }
 
 config_mgr = ConfigManager()
@@ -110,6 +114,9 @@ def _job_status_dict() -> dict:
         "elapsed_sec": elapsed,
         "config_name": job["config_name"],
         "csv_total_rows": job["csv_total_rows"],
+        "waiting_for_ip_rotation": job["waiting_for_ip_rotation"],
+        "waiting_since": job["waiting_since"],
+        "pause_for_ip_rotation": job["pause_for_ip_rotation"],
     }
 
 
@@ -292,6 +299,9 @@ def run_start():
     config_name = data.get("config_name", "").strip()
     num_runs = int(data.get("num_runs", 5))
     sleep_between = int(data.get("sleep_between_runs", 30))
+    pause_for_ip_rotation = bool(data.get("pause_for_ip_rotation", False))
+    pause_event = threading.Event()
+    pause_event.set()  # pre-set so first run starts immediately without pausing
 
     try:
         config = config_mgr.load(config_name)
@@ -321,7 +331,13 @@ def run_start():
         }), 400
 
     stop_event = threading.Event()
-    bot = SurveyBot(config=config, csv_manager=csv_mgr, stop_event=stop_event)
+    bot = SurveyBot(
+        config=config,
+        csv_manager=csv_mgr,
+        stop_event=stop_event,
+        pause_for_ip_rotation=pause_for_ip_rotation,
+        pause_event=pause_event,
+    )
 
     job.update({
         "running": True,
@@ -332,7 +348,13 @@ def run_start():
         "started_at": datetime.utcnow().isoformat(),
         "config_name": config_name,
         "csv_total_rows": csv_rows,
+        "waiting_for_ip_rotation": False,
+        "waiting_since": None,
+        "pause_for_ip_rotation": pause_for_ip_rotation,
+        "pause_event": pause_event,
     })
+
+    set_job_ref(job)
 
     def _on_progress(result: dict):
         job["results"].append(result)
@@ -346,6 +368,7 @@ def run_start():
         finally:
             job["running"] = False
             job["current_run"] = len(job["results"])
+            job["waiting_for_ip_rotation"] = False
 
     t = threading.Thread(target=_run, daemon=True)
     job["thread"] = t
@@ -364,6 +387,14 @@ def run_stop():
     if job["stop_event"]:
         job["stop_event"].set()
     return jsonify({"status": "stopping"})
+
+
+@app.route("/run/continue", methods=["POST"])
+def run_continue():
+    if job.get("pause_event"):
+        job["pause_event"].set()
+    job["waiting_for_ip_rotation"] = False
+    return jsonify({"status": "continued"})
 
 
 @app.route("/history")
