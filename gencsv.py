@@ -89,13 +89,13 @@ def main():
 
     with open(filename, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(["name", "email", "phone"])
+        writer.writerow(["name", "email", "phone", "used"])
         
         for i in range(num_rows):
             name = generate_fake_name()
             email = email_list[i]
             phone = generate_phone(show_dash)
-            writer.writerow([name, email, phone])
+            writer.writerow([name, email, phone, 0])
 
     print(f"--- Đã gen xong {num_rows} hàng vào file {filename} ---")
 

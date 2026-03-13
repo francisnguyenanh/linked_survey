@@ -55,7 +55,7 @@
       </div>
     </div>
     <div class="mt-3">
-      <span class="badge bg-secondary">📄 personas.csv — <strong>{{ csv_rows }}</strong> rows available</span>
+      <span class="badge bg-secondary">📄 personas.csv — <strong>{{ unused_rows }}</strong>/{{ csv_rows }} unused rows</span>
       {% if csv_rows == 0 %}<a href="/csv" class="ms-2 small text-danger">Upload CSV first</a>{% endif %}
     </div>
     <div id="start-msg" class="mt-3"></div>

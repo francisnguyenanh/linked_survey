@@ -348,6 +348,7 @@ class SurveyBot:
           "error_msg":    str | None,
           "duration_sec": float,
           "persona":      dict | None,
+          "persona_row_index": int | None,  # Internal: for marking as used
           "timestamp":    ISO str,
           "config_name":  str,
         }
@@ -358,6 +359,7 @@ class SurveyBot:
 
         # Step 1: Fetch persona — if None, stop immediately (no browser)
         persona = self.csv_manager.get_row(run_index)
+        persona_row_index = None
         if persona is None:
             return {
                 "run_index": run_index,
@@ -365,9 +367,13 @@ class SurveyBot:
                 "error_msg": f"CSV exhausted at run {run_index}",
                 "duration_sec": round(time.time() - started, 2),
                 "persona": None,
+                "persona_row_index": None,
                 "timestamp": timestamp,
                 "config_name": config_name,
             }
+        
+        # Extract and remove internal row index from persona dict
+        persona_row_index = persona.pop("_row_index", None)
 
         driver = None
         answers = []
@@ -459,6 +465,7 @@ class SurveyBot:
                 "error_msg": None,
                 "duration_sec": duration,
                 "persona": persona,
+                "persona_row_index": persona_row_index,
                 "answers": answers,
                 "timestamp": timestamp,
                 "config_name": config_name,
@@ -475,6 +482,7 @@ class SurveyBot:
                 "error_msg": err,
                 "duration_sec": duration,
                 "persona": persona,
+                "persona_row_index": persona_row_index,
                 "answers": answers,
                 "timestamp": timestamp,
                 "config_name": config_name,

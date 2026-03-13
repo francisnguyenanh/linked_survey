@@ -290,14 +290,16 @@ def csv_upload():
 def run_page():
     configs = config_mgr.list_all()
     csv_rows = 0
+    unused_rows = 0
     if PERSONAS_CSV.exists():
         try:
             mgr = CSVManager()
             mgr.load(str(PERSONAS_CSV))
             csv_rows = mgr.total_rows()
+            unused_rows = mgr.unused_rows()
         except Exception:
             pass
-    return render_template("run.html", configs=configs, csv_rows=csv_rows)
+    return render_template("run.html", configs=configs, csv_rows=csv_rows, unused_rows=unused_rows)
 
 
 @app.route("/run/start", methods=["POST"])
@@ -331,12 +333,15 @@ def run_start():
         return jsonify({"status": "error", "message": f"CSV load error: {exc}"}), 400
 
     csv_rows = csv_mgr.total_rows()
-    if csv_rows < num_runs:
+    unused_rows = csv_mgr.unused_rows()
+    
+    if unused_rows < num_runs:
         return jsonify({
             "status": "error",
             "message": (
-                f"CSV has only {csv_rows} rows but you requested {num_runs} runs. "
-                "Add more rows or reduce num_runs."
+                f"CSV has {unused_rows} unused rows out of {csv_rows} total, "
+                f"but you requested {num_runs} runs. "
+                "Add more personas or reduce num_runs."
             ),
         }), 400
 
@@ -369,6 +374,15 @@ def run_start():
     def _on_progress(result: dict):
         job["results"].append(result)
         job["current_run"] = len(job["results"])
+        
+        # Mark persona as used if the run succeeded or had an error (meaning it was attempted)
+        if result.get("status") in ("success", "error"):
+            persona_row_index = result.get("persona_row_index")
+            if persona_row_index is not None:
+                if csv_mgr.mark_as_used(persona_row_index):
+                    app.logger.info(f"Marked persona row {persona_row_index} as used after run {result.get('run_index')}")
+                else:
+                    app.logger.warning(f"Failed to mark persona row {persona_row_index} as used")
 
     def _run():
         try:
