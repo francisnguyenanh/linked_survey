@@ -69,7 +69,9 @@ def _make_driver() -> uc.Chrome:
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,800")
-    return uc.Chrome(options=opts)
+    opts.add_argument("--window-position=2000,0")  # Position window off-screen from start
+    driver = uc.Chrome(options=opts)
+    return driver
 
 
 def _find_question_container(driver, wait: WebDriverWait, question_index: int):

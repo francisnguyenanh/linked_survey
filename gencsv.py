@@ -2,16 +2,33 @@ import csv
 import random
 import itertools
 
+# Dữ liệu mẫu mở rộng
+FIRST_NAMES = [
+    "Mike", "Josh", "John", "David", "Emma", "Chris", "Alex", "Ryan", "Sarah", "Kevin",
+    "Sophia", "Liam", "Noah", "Olivia", "Ethan", "Ava", "Lucas", "Mia", "Benjamin", "Zoe"
+]
+
+MIDDLE_NAMES = [
+    "James", "Lee", "William", "Marie", "Ann", "Elizabeth", "Alexander", "Grace", "Michael", "Rose"
+]
+
+LAST_NAMES = [
+    "Smith", "Johnson", "Brown", "Taylor", "Miller", "Wilson", "Anderson", "Thomas", "Moore",
+    "Garcia", "Martinez", "Robinson", "Clark", "Rodriguez", "Lewis", "Walker", "Hall", "Young"
+]
+
 def generate_fake_name():
-    first_names = ["Mike", "Josh", "John", "David", "Emma", "Chris", "Alex", "Ryan", "Sarah", "Kevin"]
-    last_names = ["Smith", "Johnson", "Brown", "Taylor", "Miller", "Wilson", "Anderson", "Thomas", "Moore"]
-    middle_names = ["James", "Lee", "William", "Marie", "Ann"]
+    first = random.choice(FIRST_NAMES)
+    last = random.choice(LAST_NAMES)
     
-    # Random chọn tên có 2 hoặc 3 từ
-    if random.choice([2, 3]) == 2:
-        return f"{random.choice(first_names)} {random.choice(last_names)}"
-    else:
-        return f"{random.choice(first_names)} {random.choice(middle_names)} {random.choice(last_names)}"
+    # Xác suất: 40% tên 2 chữ, 60% tên 3 chữ (tỉ lệ này giúp dữ liệu trông tự nhiên hơn)
+    has_middle_name = random.random() > 0.4 
+    
+    if has_middle_name:
+        middle = random.choice(MIDDLE_NAMES)
+        return f"{first} {middle} {last}"
+    
+    return f"{first} {last}"
 
 def generate_dot_emails(email_goc, count):
     name, domain = email_goc.split('@')
@@ -38,12 +55,19 @@ def generate_dot_emails(email_goc, count):
     return list(results)
 
 def generate_phone(use_dash=False):
-    part2 = "".join([str(random.randint(0, 9)) for _ in range(4)])
-    part3 = "".join([str(random.randint(0, 9)) for _ in range(4)])
+    # Danh sách các đầu số theo yêu cầu
+    prefixes = ["070", "080", "090"]
+    prefix = random.choice(prefixes)
+    
+    # Tạo 8 chữ số ngẫu nhiên còn lại (chia làm 2 cụm, mỗi cụm 4 số)
+    # k=4 nghĩa là lấy 4 phần tử ngẫu nhiên từ dải từ 0-9
+    part2 = "".join(random.choices("0123456789", k=4))
+    part3 = "".join(random.choices("0123456789", k=4))
+    
     if use_dash:
-        return f"070-{part2}-{part3}"
+        return f"{prefix}-{part2}-{part3}"
     else:
-        return f"070{part2}{part3}"
+        return f"{prefix}{part2}{part3}"
 
 def main():
     # Nhập thông tin đầu vào
