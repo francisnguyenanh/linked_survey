@@ -187,12 +187,14 @@ def configure_page(config_name: str):
 def configure_save():
     payload = request.get_json(force=True) or {}
     config_name = payload.get("config_name", "unnamed")
+    old_config_name = payload.get("old_config_name", config_name)
     url = payload.get("url", "")
     num_runs = int(payload.get("num_runs", 5))
     sleep_between = int(payload.get("sleep_between_runs", 30))
 
+    # Load existing config: if old_config_name is different (rename case), load from old name
     try:
-        existing = config_mgr.load(config_name)
+        existing = config_mgr.load(old_config_name)
     except FileNotFoundError:
         existing = {"questions": []}
 
@@ -217,6 +219,14 @@ def configure_save():
         "questions": questions,
     }
     config_mgr.save(config)
+    
+    # If renaming, delete old config
+    if old_config_name != config_name:
+        try:
+            config_mgr.delete(old_config_name)
+        except Exception:
+            pass
+    
     return jsonify({"status": "ok", "config_name": config_name})
 
 

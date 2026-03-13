@@ -50,7 +50,7 @@ def main():
     email_input = input("Nhập email gốc (vd: tomobedocuments@gmail.com): ")
     num_rows = int(input("Số lượng hàng muốn gen: "))
     show_dash = input("Có hiển thị dấu '-' trong số điện thoại không? (y/n): ").lower() == 'y'
-    filename = "data/personas.csv"
+    filename = "personas.csv"
 
     # Gen email trước vì đây là phần khó nhất để đảm bảo không trùng
     if '@' not in email_input or email_input.count('@') != 1:

@@ -368,6 +368,7 @@ class SurveyBot:
             }
 
         driver = None
+        answers = []
         try:
             # Step 2: Launch browser
             driver = _make_driver()
@@ -381,6 +382,7 @@ class SurveyBot:
             _wait_for_page_ready(driver, wait)
 
             # Step 4: Fill each question
+            answers = []
             for q in self.config.get("questions", []):
                 q_idx = q["question_index"]
                 q_type = q["question_type"]
@@ -395,6 +397,11 @@ class SurveyBot:
                     chosen = random.choice(allowed)
                     _click_radio(driver, container, chosen)
                     _log(f"  Q{q_idx} radio → index {chosen}")
+                    answers.append({
+                        "question_index": q_idx,
+                        "question_type": "radio",
+                        "chosen_option_index": chosen,
+                    })
 
                 elif q_type == "dropdown":
                     allowed = q.get("allowed_options", [])
@@ -404,10 +411,24 @@ class SurveyBot:
                     chosen = random.choice(allowed)
                     _select_dropdown(driver, container, chosen)
                     _log(f"  Q{q_idx} dropdown → index {chosen}")
+                    answers.append({
+                        "question_index": q_idx,
+                        "question_type": "dropdown",
+                        "chosen_option_index": chosen,
+                    })
 
                 elif q_type in ("text_group", "text"):
                     _fill_text_group(container, persona)
                     _log(f"  Q{q_idx} text_group → filled with persona")
+                    answers.append({
+                        "question_index": q_idx,
+                        "question_type": q_type,
+                        "filled": {
+                            "name": persona.get("name", ""),
+                            "email": persona.get("email", ""),
+                            "phone": persona.get("phone", ""),
+                        },
+                    })
 
                 # Human-like delay between fields
                 time.sleep(random.uniform(0.8, 2.0))
@@ -436,6 +457,7 @@ class SurveyBot:
                 "error_msg": None,
                 "duration_sec": duration,
                 "persona": persona,
+                "answers": answers,
                 "timestamp": timestamp,
                 "config_name": config_name,
             }
@@ -451,6 +473,7 @@ class SurveyBot:
                 "error_msg": err,
                 "duration_sec": duration,
                 "persona": persona,
+                "answers": answers,
                 "timestamp": timestamp,
                 "config_name": config_name,
             }

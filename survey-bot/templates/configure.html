@@ -112,6 +112,7 @@ async function saveConfig() {
 
   const payload = {
     config_name: document.getElementById('cfg-name').value.trim(),
+    old_config_name: {{ config.config_name | tojson }},
     url: {{ config.url | tojson }},
     num_runs: parseInt(document.getElementById('cfg-runs').value),
     sleep_between_runs: parseInt(document.getElementById('cfg-sleep').value),
