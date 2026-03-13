@@ -296,7 +296,7 @@ class SurveyBot:
             self.current_run = i + 1
             _log(f"▶ Starting run {self.current_run}/{num_runs}")
 
-            result = self.run_once(i)
+            result = self.run_once(i, csv_index=0)
             self.results.append(result)
             _append_log(result)
 
@@ -337,9 +337,12 @@ class SurveyBot:
         _log("Run loop finished.")
 
     # ------------------------------------------------------------------
-    def run_once(self, run_index: int) -> dict:
+    def run_once(self, run_index: int, csv_index: int = 0) -> dict:
         """
         Execute one survey submission.
+
+        run_index: iteration counter (for logging/tracking)
+        csv_index: index into unused rows list (always 0 = first unused row)
 
         Returns a result dict:
         {
@@ -357,8 +360,8 @@ class SurveyBot:
         timestamp = datetime.utcnow().isoformat()
         config_name = self.config.get("config_name", "unknown")
 
-        # Step 1: Fetch persona — if None, stop immediately (no browser)
-        persona = self.csv_manager.get_row(run_index)
+        # Step 1: Fetch persona — always take first unused row (csv_index=0)
+        persona = self.csv_manager.get_row(csv_index)
         persona_row_index = None
         if persona is None:
             return {
