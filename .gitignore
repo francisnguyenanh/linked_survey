@@ -1,3 +1,6 @@
 /.DS_Store
 /.venv
 *.pyc
+survey-bot/__pycache__/bot.cpython-313.pyc
+survey-bot/__pycache__/bot.cpython-313.pyc
+survey-bot/__pycache__/csv_manager.cpython-313.pyc
