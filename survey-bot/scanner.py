@@ -173,7 +173,26 @@ return (function() {
                    ph.toLowerCase().includes('tel') || nameAttr.includes('phone')) {
           key = 'phone';
         }
-        fields.push({ field_key: key, placeholder: ph });
+        // Extract label for this textbox
+        let label = '';
+        if (inp.id) {
+          const labelEl = document.querySelector('label[for="' + inp.id + '"]');
+          if (labelEl) label = labelEl.textContent.trim();
+        }
+        if (!label) {
+          const prev = inp.previousElementSibling;
+          if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'DIV')) {
+            label = prev.textContent.trim();
+          }
+        }
+        if (!label && inp.parentElement) {
+          // Check parent's previous sibling
+          const parentPrev = inp.parentElement.previousElementSibling;
+          if (parentPrev) label = parentPrev.textContent.trim().split('\\n')[0].trim().substring(0, 80);
+        }
+        // Use label as field_key if found, otherwise fallback to inferred key
+        const fieldKey = label ? label : key;
+        fields.push({ field_key: fieldKey, placeholder: ph, label: label });
       });
 
     } else if (textInputs.length === 1) {

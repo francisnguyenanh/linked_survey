@@ -69,7 +69,7 @@ def _make_driver() -> uc.Chrome:
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,800")
-    opts.add_argument("--window-position=2000,0")  # Position window off-screen from start
+    opts.add_argument("--window-position=100,100")  # Position window off-screen from start
     driver = uc.Chrome(options=opts)
     return driver
 
@@ -175,22 +175,26 @@ def _fill_text(container, value: str):
         time.sleep(random.uniform(0.2, 0.5))
 
 
-def _fill_text_group(container, persona: dict):
+def _fill_text_group(container, persona: dict, fields: list = None):
     """
     Fill text/email/tel inputs inside a text_group question.
 
-    SurveyMonkey groups name, email, phone inside one question block.
-    We locate inputs in DOM order and map them to persona fields:
-      inputs[0] → name, inputs[1] → email, inputs[2] → phone
+    If fields is provided, each field's field_key is used as the CSV column key
+    to look up persona value. Otherwise falls back to positional order (name, email, phone).
     """
     inputs = container.find_elements(
         By.CSS_SELECTOR, 'input[type="text"], input[type="email"], input[type="tel"]'
     )
-    field_values = [
-        persona.get("name", ""),
-        persona.get("email", ""),
-        persona.get("phone", ""),
-    ]
+    if fields:
+        # Map each input using field_key → CSV column
+        field_values = [persona.get(f.get("field_key", ""), "") for f in fields]
+    else:
+        # Fallback: positional order
+        field_values = [
+            persona.get("お名前（Name）", ""),
+            persona.get("メールアドレス（E-mail address）", ""),
+            persona.get("携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））", ""),
+        ]
     for i, inp in enumerate(inputs):
         if i >= len(field_values):
             break
@@ -453,16 +457,17 @@ class SurveyBot:
                     })
 
                 elif q_type == "text_group":
-                    # Fill text_group with persona data (name, email, phone)
-                    _fill_text_group(container, persona)
-                    _log(f"  Q{q_idx} text_group → filled with persona")
+                    # Fill text_group using field_key from config to map CSV columns
+                    fields = q.get("fields", [])
+                    _fill_text_group(container, persona, fields)
+                    _log(f"  Q{q_idx} text_group → filled with persona (fields: {[f.get('field_key') for f in fields]})")
                     answers.append({
                         "question_index": q_idx,
                         "question_type": q_type,
-                        "filled": {
-                            "name": persona.get("name", ""),
-                            "email": persona.get("email", ""),
-                            "phone": persona.get("phone", ""),
+                        "filled": {f.get("field_key", f"field_{i}"): persona.get(f.get("field_key", ""), "") for i, f in enumerate(fields)} if fields else {
+                            "お名前（Name）": persona.get("お名前（Name）", ""),
+                            "メールアドレス（E-mail address）": persona.get("メールアドレス（E-mail address）", ""),
+                            "携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））": persona.get("携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））", ""),
                         },
                     })
 

@@ -31,12 +31,12 @@ class CSVManager:
         if not path.exists():
             raise FileNotFoundError(f"CSV file not found: {filepath}")
         df = pd.read_csv(path, dtype=str)
-        df.columns = [c.strip().lower() for c in df.columns]
-        ok, msg = self._check_columns(df, ["name", "email", "phone"])
+        df.columns = [c.strip() for c in df.columns]
+        ok, msg = self._check_columns(df, ["お名前（Name）", "メールアドレス（E-mail address）", "携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））"])
         if not ok:
             raise ValueError(f"CSV validation failed — {msg}")
         # Drop fully-empty rows
-        df = df.dropna(subset=["name", "email", "phone"]).reset_index(drop=True)
+        df = df.dropna(subset=["お名前（Name）", "メールアドレス（E-mail address）", "携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））"]).reset_index(drop=True)
         
         # Add 'used' column if it doesn't exist
         if 'used' not in df.columns:
@@ -63,11 +63,19 @@ class CSVManager:
             return None
         actual_row_idx = self._unused_indices[run_index]
         row = self._df.iloc[actual_row_idx]
+        name  = str(row.get("お名前（Name）", "")).strip()
+        email = str(row.get("メールアドレス（E-mail address）", "")).strip()
+        phone = str(row.get("携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））", "")).strip()
         return {
-            "name": str(row.get("name", "")).strip(),
-            "email": str(row.get("email", "")).strip(),
-            "phone": str(row.get("phone", "")).strip(),
-            "_row_index": actual_row_idx,  # Internal: actual row index in DataFrame
+            # Short aliases (backward-compat)
+            "name": name,
+            "email": email,
+            "phone": phone,
+            # Original column names (used by field_key mapping in text_group)
+            "お名前（Name）": name,
+            "メールアドレス（E-mail address）": email,
+            "携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））": phone,
+            "_row_index": actual_row_idx,
         }
 
     # ------------------------------------------------------------------
@@ -88,9 +96,9 @@ class CSVManager:
         for idx in self._unused_indices[:n]:
             row = self._df.iloc[idx]
             preview_list.append({
-                "name": str(row.get("name", "")).strip(),
-                "email": str(row.get("email", "")).strip(),
-                "phone": str(row.get("phone", "")).strip(),
+                "name": str(row.get("お名前（Name）", "")).strip(),
+                "email": str(row.get("メールアドレス（E-mail address）", "")).strip(),
+                "phone": str(row.get("携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））", "")).strip(),
             })
         return preview_list
 

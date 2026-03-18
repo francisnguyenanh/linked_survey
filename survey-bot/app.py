@@ -287,7 +287,7 @@ def csv_upload():
     mgr = CSVManager()
     try:
         count = mgr.load(str(tmp_path))
-        ok, msg = mgr.validate(["name", "email", "phone"])
+        ok, msg = mgr.validate(["お名前（Name）", "メールアドレス（E-mail address）", "携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））"])
         if not ok:
             tmp_path.unlink(missing_ok=True)
             return jsonify({"status": "error", "message": msg}), 400
