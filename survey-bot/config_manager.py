@@ -51,10 +51,10 @@ class ConfigManager:
                 entry["data_source"] = "csv"
                 entry["fields"] = q.get("fields", [])
                 entry["options"] = []
-            else:
-                # plain text
+            elif q_type == "text":
+                # plain text - store empty value by default
+                entry["value"] = ""
                 entry["fields"] = q.get("fields", [])
-                entry["data_source"] = "csv"
                 entry["options"] = []
             questions.append(entry)
 

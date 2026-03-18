@@ -162,6 +162,19 @@ def _select_dropdown(driver, container, option_index: int):
         )
 
 
+def _fill_text(container, value: str):
+    """
+    Fill a single text input with a fixed value from config.
+    """
+    inputs = container.find_elements(
+        By.CSS_SELECTOR, 'input[type="text"], input[type="email"], input[type="tel"]'
+    )
+    if inputs:
+        inputs[0].clear()
+        inputs[0].send_keys(value)
+        time.sleep(random.uniform(0.2, 0.5))
+
+
 def _fill_text_group(container, persona: dict):
     """
     Fill text/email/tel inputs inside a text_group question.
@@ -428,7 +441,19 @@ class SurveyBot:
                         "chosen_option_index": chosen,
                     })
 
-                elif q_type in ("text_group", "text"):
+                elif q_type == "text":
+                    # Fill text with value from config
+                    value = q.get("value", "")
+                    _fill_text(container, value)
+                    _log(f"  Q{q_idx} text → filled with config value: {value}")
+                    answers.append({
+                        "question_index": q_idx,
+                        "question_type": q_type,
+                        "filled_value": value,
+                    })
+
+                elif q_type == "text_group":
+                    # Fill text_group with persona data (name, email, phone)
                     _fill_text_group(container, persona)
                     _log(f"  Q{q_idx} text_group → filled with persona")
                     answers.append({

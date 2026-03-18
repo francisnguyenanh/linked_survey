@@ -17,15 +17,57 @@ LAST_NAMES = [
     "Garcia", "Martinez", "Robinson", "Clark", "Rodriguez", "Lewis", "Walker", "Hall", "Young"
 ]
 
+FIRST_NAMES_CN = [
+    "Wei", "Fang", "Xiuying", "Li", "Min", "Jing", "Jun", "Qiang", "Tao", "Yan",
+    "Hao", "Yi", "Mei", "Ling", "Fei", "Yang", "Xin", "Bo", "Lei", "Tian"
+]
+
+MIDDLE_NAMES_CN = [
+    "Zhi", "Zhen", "Xiao", "Zi", "Wen", "Ru", "Shu", "Chun", "Hai", "Yue"
+]
+
+LAST_NAMES_CN = [
+    "Wang", "Li", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou",
+    "Xu", "Sun", "Ma", "Zhu", "Hu", "Lin", "Guo", "He", "Gao", "Luo"
+]
+
+FIRST_NAMES_VN = [
+    "An", "Bình", "Chi", "Dũng", "Đức", "Hương", "Khoa", "Linh", "Minh", "Nam",
+    "Phong", "Quân", "Sơn", "Thảo", "Trang", "Tuấn", "Vinh", "Xuân", "Yến", "Anh"
+]
+
+MIDDLE_NAMES_VN = [
+    "Văn", "Thị", "Đình", "Ngọc", "Minh", "Hữu", "Thu", "Bảo", "Phương", "Hoàng"
+]
+
+LAST_NAMES_VN = [
+    "Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Phan", "Vũ", "Đặng", "Bùi", "Đỗ",
+    "Hồ", "Ngô", "Dương", "Lý", "Vương", "Trịnh", "Trương", "Mai", "Đào", "Lâm"
+]
+
+FIRST_NAMES_KR = [
+    "Min-jun", "Seo-jun", "Ha-joon", "Do-yun", "Ji-ho", "Seo-yeon", "Seo-yoon", "Ji-woo", "Ha-yoon", "Ji-yoo",
+    "Eun-woo", "Si-woo", "Ji-a", "Da-in", "Ye-jun", "Joo-won", "So-yul", "Ha-rin", "Ji-an", "Seo-ah"
+]
+
+MIDDLE_NAMES_KR = [
+    "Soo", "Hee", "Kyung", "Young", "Hyun", "Jae", "Sun", "Woo", "Min", "Ae"
+]
+
+LAST_NAMES_KR = [
+    "Kim", "Lee", "Park", "Choi", "Jung", "Kang", "Cho", "Yoon", "Jang", "Lim",
+    "Han", "Shin", "Oh", "Kwon", "Hwang", "Song", "An", "Hong", "Jeon", "Ko"
+]
+
 def generate_fake_name():
-    first = random.choice(FIRST_NAMES)
-    last = random.choice(LAST_NAMES)
+    first = random.choice(FIRST_NAMES_VN)
+    last = random.choice(LAST_NAMES_VN)
     
     # Xác suất: 40% tên 2 chữ, 60% tên 3 chữ (tỉ lệ này giúp dữ liệu trông tự nhiên hơn)
     has_middle_name = random.random() > 0.4 
     
     if has_middle_name:
-        middle = random.choice(MIDDLE_NAMES)
+        middle = random.choice(MIDDLE_NAMES_VN)
         return f"{first} {middle} {last}"
     
     return f"{first} {last}"
