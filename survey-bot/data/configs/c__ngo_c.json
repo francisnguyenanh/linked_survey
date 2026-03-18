@@ -1,9 +1,9 @@
 {
-  "config_name": "jpsurveymonkeycom_r_SHMFXK6",
+  "config_name": "c__ngo_c",
   "url": "https://jp.surveymonkey.com/r/SHMFXK6",
   "num_runs": 5,
   "sleep_between_runs": 30,
-  "created_at": "2026-03-18T03:52:49.181773",
+  "created_at": "2026-03-18T04:17:23.764264",
   "questions": [
     {
       "question_index": 1,
@@ -22,8 +22,7 @@
         }
       ],
       "allowed_options": [
-        0,
-        1
+        0
       ]
     },
     {
@@ -79,11 +78,9 @@
         }
       ],
       "allowed_options": [
-        0,
         1,
         2,
-        3,
-        4
+        3
       ]
     },
     {
@@ -97,7 +94,8 @@
         }
       ],
       "data_source": "csv",
-      "options": []
+      "options": [],
+      "value": "「日本一高い山は富士山である」"
     },
     {
       "question_index": 5,
@@ -116,8 +114,7 @@
         }
       ],
       "allowed_options": [
-        0,
-        1
+        0
       ]
     },
     {
@@ -428,7 +425,8 @@
         }
       ],
       "data_source": "csv",
-      "options": []
+      "options": [],
+      "value": "2"
     },
     {
       "question_index": 8,
@@ -510,8 +508,7 @@
       ],
       "allowed_options": [
         0,
-        1,
-        2
+        1
       ]
     },
     {
@@ -531,8 +528,7 @@
         }
       ],
       "allowed_options": [
-        0,
-        1
+        0
       ]
     },
     {

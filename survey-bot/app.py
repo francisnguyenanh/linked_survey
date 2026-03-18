@@ -198,16 +198,29 @@ def configure_save():
     except FileNotFoundError:
         existing = {"questions": []}
 
-    questions_update = {
-        str(q["question_index"]): q.get("allowed_options", [])
-        for q in payload.get("questions", [])
-    }
+    # Build update dict with both allowed_options and value
+    questions_update = {}
+    for q in payload.get("questions", []):
+        qi = str(q["question_index"])
+        questions_update[qi] = {
+            "allowed_options": q.get("allowed_options", []),
+            "value": q.get("value", "")
+        }
+    
     questions = []
     for q in existing.get("questions", []):
         q_copy = dict(q)
         qi = str(q["question_index"])
         if qi in questions_update:
-            q_copy["allowed_options"] = [int(i) for i in questions_update[qi]]
+            # Update allowed_options if present
+            if questions_update[qi]["allowed_options"]:
+                q_copy["allowed_options"] = [int(i) for i in questions_update[qi]["allowed_options"]]
+            # Update value if present (for text type questions)
+            if questions_update[qi]["value"]:
+                q_copy["value"] = questions_update[qi]["value"]
+            elif "value" in q_copy and not questions_update[qi]["value"]:
+                # Keep existing value if no new value provided
+                pass
         questions.append(q_copy)
 
     config = {

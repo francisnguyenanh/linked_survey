@@ -43,14 +43,23 @@
             {% endfor %}
           </div>
         {% elif q.question_type in ['text_group', 'text'] %}
-          <div class="alert alert-info mb-0 py-2">
-            📄 Will use data from <strong>CSV file</strong>
-            {% if q.question_type == 'text_group' %} (name → email → phone){% endif %}
-          </div>
-          {% if q.fields %}
-          <ul class="mt-2 mb-0 small text-muted">
-            {% for f in q.fields %}<li>{{ f.field_key }}{% if f.placeholder %}: <em>{{ f.placeholder }}</em>{% endif %}</li>{% endfor %}
-          </ul>
+          {% if q.question_type == 'text' %}
+            <p class="mb-2 text-muted small">Enter a fixed value for this text field:</p>
+            <div class="mb-2">
+              <input type="text" class="form-control" 
+                     id="q{{ q.question_index }}_text_value"
+                     value="{{ q.get('value', '') }}"
+                     placeholder="Enter text value">
+            </div>
+          {% else %}
+            <div class="alert alert-info mb-0 py-2">
+              📄 Will use data from <strong>CSV file</strong> (name → email → phone)
+            </div>
+            {% if q.fields %}
+            <ul class="mt-2 mb-0 small text-muted">
+              {% for f in q.fields %}<li>{{ f.field_key }}{% if f.placeholder %}: <em>{{ f.placeholder }}</em>{% endif %}</li>{% endfor %}
+            </ul>
+            {% endif %}
           {% endif %}
         {% endif %}
       </div>
@@ -106,6 +115,9 @@ async function saveConfig() {
       const checked = [...document.querySelectorAll(`.q${q.question_index}-opt:checked`)]
                         .map(cb => parseInt(cb.value));
       entry.allowed_options = checked;
+    } else if (q.question_type === 'text') {
+      const textValue = document.getElementById(`q${q.question_index}_text_value`)?.value || '';
+      entry.value = textValue;
     }
     return entry;
   });
