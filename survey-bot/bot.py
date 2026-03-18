@@ -69,7 +69,7 @@ def _make_driver() -> uc.Chrome:
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,800")
-    opts.add_argument("--window-position=100,100")  # Position window off-screen from start
+    opts.add_argument("--window-position=2000,2000")  # Position window off-screen from start
     driver = uc.Chrome(options=opts)
     return driver
 
@@ -175,31 +175,71 @@ def _fill_text(container, value: str):
         time.sleep(random.uniform(0.2, 0.5))
 
 
-def _fill_text_group(container, persona: dict, fields: list = None):
+def _fill_text_group(driver, container, persona: dict, fields: list = None):
     """
     Fill text/email/tel inputs inside a text_group question.
 
-    If fields is provided, each field's field_key is used as the CSV column key
-    to look up persona value. Otherwise falls back to positional order (name, email, phone).
+    If fields is provided, each input's DOM label is resolved at runtime
+    and matched against field_key in config to get the correct persona value.
+    This handles cases where textbox order may vary between page loads.
+    Falls back to positional order if labels cannot be resolved.
     """
     inputs = container.find_elements(
         By.CSS_SELECTOR, 'input[type="text"], input[type="email"], input[type="tel"]'
     )
-    if fields:
-        # Map each input using field_key → CSV column
-        field_values = [persona.get(f.get("field_key", ""), "") for f in fields]
-    else:
+
+    if not fields:
         # Fallback: positional order
         field_values = [
             persona.get("お名前（Name）", ""),
             persona.get("メールアドレス（E-mail address）", ""),
             persona.get("携帯番号（000-0000-0000）（Cell phone number（000-0000-0000））", ""),
         ]
+        for i, inp in enumerate(inputs):
+            if i >= len(field_values):
+                break
+            inp.clear()
+            inp.send_keys(field_values[i])
+            time.sleep(random.uniform(0.2, 0.5))
+        return
+
+    # Build lookup: field_key → persona value
+    field_map = {f.get("field_key", ""): persona.get(f.get("field_key", ""), "") for f in fields}
+
     for i, inp in enumerate(inputs):
-        if i >= len(field_values):
-            break
+        # Resolve label of this input from DOM at runtime
+        label = driver.execute_script("""
+            const inp = arguments[0];
+            if (inp.id) {
+                const labelEl = document.querySelector('label[for="' + inp.id + '"]');
+                if (labelEl) return labelEl.textContent.trim();
+            }
+            const prev = inp.previousElementSibling;
+            if (prev && ['LABEL','SPAN','DIV'].includes(prev.tagName)) {
+                return prev.textContent.trim();
+            }
+            if (inp.parentElement) {
+                const parentPrev = inp.parentElement.previousElementSibling;
+                if (parentPrev) return parentPrev.textContent.trim().split('\\n')[0].trim().substring(0, 80);
+            }
+            return '';
+        """, inp)
+
+        # Exact match first
+        value = field_map.get(label, None)
+        if value is None:
+            # Partial/substring match (handles minor label differences between scan and runtime)
+            for key, val in field_map.items():
+                if key and (key in label or label in key):
+                    value = val
+                    break
+        if value is None:
+            # Last resort: positional fallback
+            fallback_keys = list(field_map.keys())
+            value = field_map.get(fallback_keys[i], "") if i < len(fallback_keys) else ""
+
         inp.clear()
-        inp.send_keys(field_values[i])
+        inp.send_keys(value or "")
         time.sleep(random.uniform(0.2, 0.5))  # tiny intra-field delay
 
 
@@ -457,9 +497,9 @@ class SurveyBot:
                     })
 
                 elif q_type == "text_group":
-                    # Fill text_group using field_key from config to map CSV columns
+                    # Fill text_group: match each DOM input's label to field_key at runtime
                     fields = q.get("fields", [])
-                    _fill_text_group(container, persona, fields)
+                    _fill_text_group(driver, container, persona, fields)
                     _log(f"  Q{q_idx} text_group → filled with persona (fields: {[f.get('field_key') for f in fields]})")
                     answers.append({
                         "question_index": q_idx,
